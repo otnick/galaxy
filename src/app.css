@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+	--bg-0: #030711;
+	--bg-1: #0d1832;
+	--bg-2: #102445;
+	--text-0: #eef4ff;
+	--text-1: #aab7d9;
+	--glass-border: rgba(181, 205, 255, 0.22);
+	--glass-fill: rgba(11, 22, 43, 0.48);
+	--glow-cyan: rgba(114, 225, 255, 0.36);
+	--glow-gold: rgba(254, 202, 87, 0.3);
+	--ring-color: rgba(184, 208, 255, 0.16);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	min-height: 100%;
+	font-family: 'Outfit', sans-serif;
+	background: radial-gradient(circle at 80% 20%, #17346a 0%, transparent 42%),
+		radial-gradient(circle at 20% 80%, #0f2550 0%, transparent 48%),
+		linear-gradient(140deg, var(--bg-0) 0%, var(--bg-1) 42%, var(--bg-2) 100%);
+	color: var(--text-0);
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.gradient-backdrop {
+	position: fixed;
+	inset: 0;
+	background: radial-gradient(circle at 15% 20%, rgba(136, 85, 255, 0.12), transparent 38%),
+		radial-gradient(circle at 80% 78%, rgba(114, 225, 255, 0.1), transparent 34%);
+	pointer-events: none;
+	z-index: -1;
+}
+
+.glass-panel {
+	background: linear-gradient(155deg, rgba(255, 255, 255, 0.16), var(--glass-fill));
+	backdrop-filter: blur(18px) saturate(132%);
+	-webkit-backdrop-filter: blur(18px) saturate(132%);
+	border: 1px solid var(--glass-border);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 30px 65px rgba(1, 8, 20, 0.34);
+}
+
+.glow-cyan {
+	box-shadow: 0 0 0 1px rgba(114, 225, 255, 0.2), 0 0 42px var(--glow-cyan);
+}
+
+.glow-gold {
+	box-shadow: 0 0 0 1px rgba(255, 214, 124, 0.22), 0 0 56px var(--glow-gold);
+}
+
+.text-soft {
+	color: var(--text-1);
+}
