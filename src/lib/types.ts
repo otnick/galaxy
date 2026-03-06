@@ -9,3 +9,5 @@ export type PlanetRecord = {
 	createdAt: string;
 	updatedAt: string;
 };
+
+export type SceneTheme = 'orbit' | 'about' | 'projects' | 'contact' | 'impressum';

@@ -6,7 +6,8 @@
 		{ href: '/', label: 'Orbit' },
 		{ href: '/about', label: 'About' },
 		{ href: '/projects', label: 'Projects' },
-		{ href: '/contact', label: 'Contact' }
+		{ href: '/contact', label: 'Contact' },
+		{ href: '/impressum', label: 'Impressum' }
 	];
 </script>
 

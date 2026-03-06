@@ -13,7 +13,6 @@
 	let storyZoom = 0;
 	let uiOpacity = 1;
 	let sceneRoot: HTMLElement;
-	let heroPanel: HTMLElement;
 	let heroVisible = true;
 	let cardsVisible = false;
 
@@ -108,7 +107,7 @@
 			class="absolute inset-0 origin-center transition-transform duration-300 ease-out"
 			style={`transform: scale(${scrollZoom});`}
 		>
-			<SolarCanvas {planets} storyZoom={storyZoom} />
+			<SolarCanvas {planets} storyZoom={storyZoom} theme="orbit" />
 		</div>
 		<div
 			class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_32%,rgba(2,7,19,0.46)_100%)]"
@@ -120,72 +119,129 @@
 		style={`opacity: ${uiOpacity};`}
 	>
 		<div
-			bind:this={heroPanel}
 			class={`max-w-2xl will-change-transform transition-all duration-700 ${
 				heroVisible ? 'translate-x-0 opacity-100' : '-translate-x-24 opacity-0'
 			}`}
 		>
-			<VenganceCard className="pointer-events-auto glow-gold">
-				<p class="text-soft text-xs uppercase tracking-[0.22em]">Creative Developer Portfolio</p>
-				<h1 class="mt-3 text-4xl font-semibold leading-tight md:text-6xl">
-					3D Interactive Galaxy,<br /> Built for Motion and Depth.
-				</h1>
-				<p class="text-soft mt-4 max-w-xl text-sm leading-7 md:text-base">
-					Scroll to dive deeper into the galaxy. Then grab the scene and fly through it with full 3D controls.
-				</p>
-				<p class="text-soft mt-2 text-xs">
-					Controls: drag rotate, right-drag pan, normal wheel scrolls page, Ctrl/Cmd/Alt + wheel zooms galaxy, WASDQE fly, Shift boost.
-				</p>
-				<div class="mt-6 flex flex-wrap gap-3">
-					<VenganceButton onclick={addPlanet} disabled={creating}>
-						{creating ? 'Adding...' : 'Add Planet'}
-					</VenganceButton>
-					<p class="text-soft self-center text-sm">
-						{loading ? 'Loading planets...' : `${planets.length} persisted planets`}
-					</p>
+			<VenganceCard className="hero-panel pointer-events-auto max-w-3xl rounded-[2rem] glow-gold p-0">
+				<div class="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+					<div class="p-6 md:p-8">
+						<span class="eyebrow">Live Portfolio Galaxy</span>
+						<h1 class="mt-5 max-w-xl text-4xl font-semibold leading-[0.96] tracking-[-0.05em] md:text-[4.25rem]">
+							Spatial frontend, stripped down to what matters.
+						</h1>
+						<p class="text-soft mt-5 max-w-lg text-sm leading-7 md:text-[1.02rem]">
+							Scroll pulls the galaxy inward. Controls stay active. The UI enters with intent, then gets out of the way so the scene can breathe.
+						</p>
+						<div class="mt-8 flex flex-wrap gap-3">
+							<VenganceButton onclick={addPlanet} disabled={creating} className="min-w-36">
+								{creating ? 'Adding...' : 'Add Planet'}
+							</VenganceButton>
+							<a
+								href="/projects"
+								class="pointer-events-auto inline-flex items-center rounded-full border border-white/12 px-5 py-2.5 text-sm tracking-[0.08em] text-white/88 transition hover:border-white/22 hover:bg-white/8"
+							>
+								View Projects
+							</a>
+						</div>
+						<div class="mt-8 grid gap-3 sm:grid-cols-3">
+							<div class="data-chip">
+								<div>
+									<p class="text-dim text-[0.65rem] uppercase tracking-[0.18em]">State</p>
+									<p class="mt-1 text-sm">{loading ? 'Syncing' : `${planets.length} stored`}</p>
+								</div>
+								<p class="text-dim text-xs">01</p>
+							</div>
+							<div class="data-chip">
+								<div>
+									<p class="text-dim text-[0.65rem] uppercase tracking-[0.18em]">Input</p>
+									<p class="mt-1 text-sm">Drag, pan, fly</p>
+								</div>
+								<p class="text-dim text-xs">02</p>
+							</div>
+							<div class="data-chip">
+								<div>
+									<p class="text-dim text-[0.65rem] uppercase tracking-[0.18em]">Rhythm</p>
+									<p class="mt-1 text-sm">Scroll then roam</p>
+								</div>
+								<p class="text-dim text-xs">03</p>
+							</div>
+						</div>
+					</div>
+
+					<div class="border-t border-white/10 p-6 md:p-8 lg:border-l lg:border-t-0">
+						<p class="text-dim text-[0.66rem] uppercase tracking-[0.2em]">System Feed</p>
+						<div class="mt-5 space-y-3">
+							<div class="rounded-2xl border border-white/8 bg-white/4 p-4">
+								<p class="text-dim text-[0.62rem] uppercase tracking-[0.18em]">Orbit Mode</p>
+								<p class="mt-2 text-sm leading-6 text-white/88">
+									Normal scroll drives the story. `Ctrl`/`Cmd`/`Alt` + wheel zooms the galaxy directly.
+								</p>
+							</div>
+							<div class="rounded-2xl border border-white/8 bg-white/4 p-4">
+								<p class="text-dim text-[0.62rem] uppercase tracking-[0.18em]">Visual Rule</p>
+								<p class="mt-2 text-sm leading-6 text-white/88">
+									The interface stays shallow and clean so the WebGL scene keeps the emotional weight.
+								</p>
+							</div>
+							<div class="rounded-2xl border border-dashed border-white/8 bg-white/3 p-4">
+								<p class="text-dim text-[0.62rem] uppercase tracking-[0.18em]">Current Focus</p>
+								<p class="mt-2 text-sm leading-6 text-white/88">
+									Minimal chrome, depth-first interaction, and better spatial pacing across the scroll.
+								</p>
+							</div>
+						</div>
+					</div>
 				</div>
 			</VenganceCard>
 		</div>
 
-		<div class="h-[58vh] md:h-[85vh]"></div>
+		<div class="h-[54vh] md:h-[72vh]"></div>
 
-		<div class="grid gap-4 md:grid-cols-[1.1fr_1fr]">
+		<div class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
 			<div
 				class={`will-change-transform transition-all duration-700 ${
 					cardsVisible ? 'translate-x-0 opacity-100' : '-translate-x-24 opacity-0'
 				}`}
 			>
-				<VenganceCard className="pointer-events-auto h-full glow-cyan">
-					<p class="text-soft text-xs uppercase tracking-[0.22em]">Featured</p>
-					<h2 class="mt-2 text-3xl font-semibold leading-tight">Designing products that feel cinematic.</h2>
-					<p class="text-soft mt-4 leading-7">
-						I build premium web experiences with high-performance rendering, tactile transitions, and strong product thinking.
+				<VenganceCard className="pointer-events-auto h-full rounded-[2rem] glow-cyan">
+					<p class="text-dim text-[0.72rem] uppercase tracking-[0.2em]">Featured Approach</p>
+					<h2 class="mt-3 max-w-md text-3xl font-semibold leading-tight tracking-[-0.03em] md:text-[2.5rem]">
+						Interfaces that feel precise, spacious, and cinematic.
+					</h2>
+					<p class="text-soft mt-5 max-w-xl leading-7">
+						The work lives between product clarity and immersive visuals: interaction systems, motion direction, and frontend engineering that holds up under scale.
 					</p>
+					<div class="mt-8 flex flex-wrap gap-2">
+						<span class="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/78">WebGL</span>
+						<span class="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/78">Design Systems</span>
+						<span class="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/78">Creative Frontend</span>
+					</div>
 				</VenganceCard>
 			</div>
 			<div
-				class={`pointer-events-auto grid gap-4 will-change-transform transition-all duration-700 ${
+				class={`pointer-events-auto grid gap-3 will-change-transform transition-all duration-700 md:gap-4 ${
 					cardsVisible ? 'translate-x-0 opacity-100' : 'translate-x-24 opacity-0'
 				}`}
 			>
 				<PortfolioCard
 					title="About Me"
-					description="Design-minded engineer focused on immersive interactions and performant frontend systems."
+					description="Design-minded engineering with a bias for motion, structure, and restraint."
 					href="/about"
 				/>
 				<PortfolioCard
 					title="Projects"
-					description="Selected work spanning generative visuals, product design systems, and full-stack apps."
+					description="Selected product systems, visual experiments, and interaction-heavy builds."
 					href="/projects"
 				/>
 				<PortfolioCard
 					title="Contact"
-					description="Open to freelance, product collaborations, and technical art projects."
+					description="For collaborations, freelance work, and ambitious digital experiences."
 					href="/contact"
 				/>
 			</div>
 		</div>
 
-		<div class="h-[120vh] md:h-[170vh]"></div>
+		<div class="h-[130vh] md:h-[170vh]"></div>
 	</div>
 </section>
