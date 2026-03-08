@@ -18,7 +18,7 @@
 	{type}
 	{disabled}
 	{onclick}
-	class={`rounded-full border border-white/14 bg-gradient-to-r from-white/16 to-white/8 px-5 py-2.5 text-sm font-medium tracking-[0.08em] text-white shadow-[0_0_24px_rgba(114,225,255,0.12)] transition duration-300 hover:-translate-y-0.5 hover:border-white/24 hover:bg-white/18 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+	class={`rounded-full border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.11),rgba(255,255,255,0.04))] px-5 py-2.5 text-sm font-medium tracking-[0.08em] text-white shadow-[0_10px_28px_rgba(3,10,22,0.22)] transition duration-300 hover:-translate-y-0.5 hover:border-white/22 hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
 >
 	{@render children?.()}
 </button>

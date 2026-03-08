@@ -6,8 +6,9 @@
 	let {
 		planets = [],
 		storyZoom = 0,
-		theme = 'orbit'
-	} = $props<{ planets?: PlanetRecord[]; storyZoom?: number; theme?: SceneTheme }>();
+		theme = 'orbit',
+		journeyProgress = 0
+	} = $props<{ planets?: PlanetRecord[]; storyZoom?: number; theme?: SceneTheme; journeyProgress?: number }>();
 	let container: HTMLDivElement;
 	let engine: ThreeGalaxyEngine | undefined;
 
@@ -29,6 +30,10 @@
 
 	$effect(() => {
 		engine?.setTheme(theme);
+	});
+
+	$effect(() => {
+		engine?.setJourneyProgress(journeyProgress);
 	});
 </script>
 
