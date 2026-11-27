@@ -173,6 +173,17 @@ a {
 	font-size: 1.3rem;
 }
 
+/* planet tags sit to the right of their world, HUD style */
+.u-label--body {
+	translate: 0 -50%;
+}
+
+.u-label--body .u-label__text {
+	align-items: flex-start;
+	padding-left: 10px;
+	border-left: 1px solid var(--phosphor-dim);
+}
+
 .u-label.is-far .u-label__sub {
 	opacity: 0;
 }

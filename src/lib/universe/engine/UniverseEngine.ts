@@ -1029,7 +1029,7 @@ export class UniverseEngine {
 	private updateLabels() {
 		const { w, h } = this.size;
 		const f = this.focus;
-		const place = (el: HTMLElement, world: THREE.Vector3, offsetY: number, opacity: number) => {
+		const place = (el: HTMLElement, world: THREE.Vector3, offsetY: number, opacity: number, offsetX = 0) => {
 			if (opacity <= 0.01) {
 				if (el.style.opacity !== '0') el.style.opacity = '0';
 				return;
@@ -1041,7 +1041,7 @@ export class UniverseEngine {
 			}
 			const x = ((this.projected.x + 1) / 2) * w;
 			const y = ((1 - this.projected.y) / 2) * h;
-			el.style.transform = `translate3d(${x.toFixed(1)}px, ${(y + offsetY).toFixed(1)}px, 0)`;
+			el.style.transform = `translate3d(${(x + offsetX).toFixed(1)}px, ${(y + offsetY).toFixed(1)}px, 0)`;
 			el.style.opacity = opacity.toFixed(2);
 		};
 		const fovScale = (h / 2) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
@@ -1066,7 +1066,7 @@ export class UniverseEngine {
 				const bd = b.world.distanceTo(this.camera.position);
 				if (o > 0 && this.behindStar(b.world, sys, bd)) o *= 0.2;
 				const px = (b.extent / bd) * fovScale;
-				place(b.label, b.world, Math.max(px, 4) + 10, o);
+				place(b.label, b.world, 0, o, Math.max(px, 4) + 12);
 			}
 		}
 	}
