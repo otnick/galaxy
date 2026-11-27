@@ -104,7 +104,7 @@ export const SYSTEMS: StarSystem[] = [
 				tags: ['WebGL / Three.js', 'Vue.js', 'SvelteKit', 'Digital Twins'],
 				visual: {
 					kind: 'ocean',
-					palette: ['#0b2a5b', '#2f7fd6', '#d8f3ff'],
+					palette: ['#0b2a5b', '#4f8f5a', '#e9e0c0'],
 					radius: 5.2,
 					orbit: 70,
 					speed: 0.06,
@@ -276,7 +276,7 @@ export const SYSTEMS: StarSystem[] = [
 				links: [{ label: 'fishbox.nickot.is', href: 'https://fishbox.nickot.is' }],
 				visual: {
 					kind: 'ocean',
-					palette: ['#041c3a', '#1f8ad6', '#bff6ff'],
+					palette: ['#06305e', '#3c8f6a', '#e8dcb0'],
 					radius: 6.6,
 					orbit: 96,
 					speed: 0.042,

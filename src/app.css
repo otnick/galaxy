@@ -34,6 +34,9 @@
 	--top-h: 60px;
 	--deck-h: 132px;
 	--gap: 14px;
+	--pillar-w: min(420px, 40vw);
+	/* horizontal centre of the free window area left of the display */
+	--window-cx: calc((100% - var(--pillar-w) - var(--gap)) / 2);
 
 	/* plastic grain, authored as an SVG noise tile */
 	--grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.18 0 0 0 0 0.14 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -282,9 +285,9 @@ a {
 .tape {
 	position: absolute;
 	top: calc(var(--top-h) + 12px);
-	left: 50%;
+	left: var(--window-cx);
 	translate: -50% 0;
-	width: min(420px, 60vw);
+	width: min(420px, 40vw);
 	height: 40px;
 	overflow: hidden;
 	pointer-events: none;
@@ -351,7 +354,7 @@ a {
 
 .hud-hint {
 	position: absolute;
-	left: 50%;
+	left: var(--window-cx);
 	bottom: calc(var(--deck-h) + 18px);
 	translate: -50% 0;
 	margin: 0;
@@ -777,7 +780,7 @@ a {
 	top: calc(var(--top-h) + env(safe-area-inset-top) + var(--gap));
 	right: var(--gap);
 	bottom: calc(var(--deck-h) + env(safe-area-inset-bottom) + var(--gap));
-	width: min(420px, 40vw);
+	width: var(--pillar-w);
 	display: flex;
 	z-index: 4;
 	padding: 10px;
@@ -1225,6 +1228,7 @@ a {
 		--top-h: 52px;
 		--deck-h: 84px;
 		--gap: 8px;
+		--window-cx: 50%;
 	}
 
 	.hull--top {
@@ -1313,7 +1317,7 @@ a {
 	}
 
 	.tape {
-		width: 60vw;
+		width: 70vw;
 	}
 
 	.hud-hint {
