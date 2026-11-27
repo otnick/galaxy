@@ -9,67 +9,34 @@ The site also functions as a personal developer portfolio.
 ---
 
 ## Tech Stack
-- SvelteKit (TypeScript)
-- Canvas 2D (solar system rendering)
-- Server endpoints in SvelteKit
-- Persistence: Prisma + SQLite (preferred)
-- Styling: TailwindCSS
-- UI Style: Liquid Glass (modern glassmorphism with depth, blur, glow)
+- SvelteKit (TypeScript, Svelte 5 runes)
+- Three.js `three/webgpu` (WebGPURenderer, automatic WebGL2 fallback)
+- TSL node materials for every shader (compile to WGSL and GLSL)
+- Post-processing via `THREE.RenderPipeline` (bloom, chromatic aberration on warp, vignette, film grain)
+- Server endpoints in SvelteKit, persistence: Prisma + SQLite
+- Styling: TailwindCSS import + hand-written tokens in `src/app.css`
 
 ---
 
-## Visual Design — Liquid Glass Style
+## Visual Design — Retro-futurist cockpit, minimal HUD
 
-The UI must follow a “Liquid Glass” aesthetic:
-
-- Frosted glass panels
-- backdrop-blur
-- translucent gradients
-- subtle light refractions
-- soft glowing edges
-- smooth animations (opacity, blur, float)
-- radial gradients for light sources
-- no harsh borders
-- layered depth using shadow + blur
-
-Color palette:
-- Deep space background (#050510 – #0d0d1f gradient)
-- Soft blue / purple glow accents
-- Sun: warm yellow/orange radial glow
-- UI glass: rgba(255,255,255,0.08–0.15)
-
-Use:
-- backdrop-filter: blur()
-- soft inner shadows
-- animated light shimmer (subtle)
+- The page is the view out of a ship's window. The 3D universe is the main surface.
+- HUD is line-work and text on the glass. No panels, cards or surfaces unless they hold real text.
+- One text screen (phosphor green, VT323, scanlines) for the focused content. Michroma for the ident only.
+- Signal orange (`--signal`) marks the active star, back link and lock reticle.
+- No glassmorphism, no kicker labels above headings, no unicode glyph icons (use `Icon.svelte`).
+- Plenty of nebula and haze in the scene; planets procedurally shaded per kind.
 
 ---
 
 ## Structure
 
-### Landing Page (/)
-- Fullscreen canvas
-- Sun in center
-- Orbiting planets (user names)
-- Minimal glass input panel to add name
-- Small floating glass navigation panel
-
-### Portfolio Sections
-Add additional routes:
-
-- /about
-- /projects
-- /contact
-
-All pages:
-- Glass cards
-- Smooth transitions
-- Maintain space theme
-
-Navigation:
-- Floating glass navbar
-- Smooth page transitions
-- Subtle fade/blur transitions between routes
+- All content lives in `src/lib/universe/content.ts` (systems = stars, bodies = planets).
+- Routes: `/[[system]]/[[body]]`. The URL is the single source of truth for camera focus.
+- `src/lib/universe/engine/` holds the engine (`UniverseEngine.ts`) and TSL materials (`materials.ts`).
+- `src/lib/components/Universe.svelte` owns the HUD and syncs the URL to the engine; `ContentPanel.svelte` renders the text screen.
+- Navigation: click a star/planet, keys 1–5, arrow keys for siblings, Esc to zoom out, wheel out to the parent level.
+- Without WebGPU/WebGL2 a static fallback shows all content as text.
 
 ---
 
@@ -92,11 +59,11 @@ Orbit radius must be deterministic:
 
 ## Animation Rules
 
-- Use deltaTime-based animation
-- 60fps target
-- Keep animation smooth even with 300+ planets
-- Avoid expensive re-renders in Svelte
-- Only Canvas handles animation loop
+- Use deltaTime-based animation, 60fps target
+- Keep animation smooth even with 300+ community planets (one InstancedMesh)
+- Avoid expensive re-renders in Svelte; only the engine runs the frame loop
+- Respect `prefers-reduced-motion`; low-power tier for phones and weak CPUs
+- Debug params: `?debug=low`, `nosky`, `nodust`, `nofog`
 
 ---
 
