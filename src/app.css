@@ -697,9 +697,7 @@ kbd {
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
-	margin-top: 26px;
-	padding-top: 12px;
-	border-top: 1px dashed var(--phosphor-faint);
+	margin-top: 22px;
 	font-size: 1.15rem;
 	text-transform: uppercase;
 }
@@ -934,6 +932,10 @@ kbd {
 		white-space: normal;
 		text-align: center;
 		width: 90vw;
+	}
+
+	.u-reticle__tag {
+		display: none;
 	}
 
 	.index--visible {
