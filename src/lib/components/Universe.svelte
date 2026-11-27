@@ -6,8 +6,6 @@
 	import type { PlanetRecord } from '$lib/types';
 	import type { Telemetry, UniverseEngine } from '$lib/universe/engine/UniverseEngine';
 	import ContentPanel from './ContentPanel.svelte';
-	import StarMap from './StarMap.svelte';
-	import HeadingTape from './HeadingTape.svelte';
 	import Icon from './Icon.svelte';
 
 	let { focus }: { focus: Focus } = $props();
@@ -187,25 +185,16 @@
 		};
 	});
 
-	const fmt = (n: number, digits = 1) => n.toFixed(digits).padStart(6, '0');
 </script>
 
 <div class="cockpit" data-status={status} data-mode={telemetry.mode} style={`--warp:${telemetry.warp.toFixed(3)}`}>
 	<canvas bind:this={canvas} class="viewport" aria-label="Interactive universe. Every star is a section, every planet a piece of content."></canvas>
 	<div bind:this={labelLayer} class="hud-layer"></div>
 
-	{#if status !== 'fallback'}
-		<HeadingTape heading={telemetry.heading} />
-	{/if}
-
-	<!-- top hull: ident plate, course readout, back key -->
-	<header class="hull hull--top">
-		<a href="/" class="plate" aria-label={`${OWNER.name}, back to the overview`}>
-			<span class="plate__name">{OWNER.name}</span>
-			<span class="plate__role">{OWNER.role}</span>
-		</a>
+	<!-- everything below is line-work and text on the window glass: no panels without text -->
+	<header class="hud-top">
+		<a href="/" class="ident" aria-label={`${OWNER.name}, back to the overview`}>{OWNER.name}</a>
 		<nav class="course" aria-label="Course">
-			<span class="course__label">Course</span>
 			<a href="/" aria-current={focus.level === 'universe' ? 'page' : undefined}>Universe</a>
 			{#if focus.level !== 'universe'}
 				<Icon name="chevron" />
@@ -217,50 +206,34 @@
 			{/if}
 		</nav>
 		{#if parentPath}
-			<a class="key key--signal key--back" href={parentPath} aria-label="Zoom out one level">
-				<Icon name="back" />
-				<span class="key__legend">Back</span>
-				<span class="key__shortcut">Esc</span>
-			</a>
-		{:else}
-			<span class="key key--back key--idle" aria-hidden="true"><Icon name="back" /><span class="key__legend">Back</span><span class="key__shortcut">Esc</span></span>
+			<a class="hud-back" href={parentPath} aria-label="Zoom out one level"><Icon name="back" />Back <kbd>Esc</kbd></a>
 		{/if}
 	</header>
 
-	<!-- right pillar: the multi-function display -->
-	<aside class="pillar" class:pillar--collapsed={collapsed} bind:this={pillarEl}>
+	<aside class="screen-slot" class:screen-slot--collapsed={collapsed} bind:this={pillarEl}>
 		<ContentPanel {focus} bind:collapsed {planets} onPlanetAdded={loadPlanets} fallback={status === 'fallback'} />
 	</aside>
 
-	<!-- bottom deck: radar, destination keys, telemetry -->
-	<footer class="hull deck" bind:this={deckEl}>
-		<StarMap {focus} heading={telemetry.heading} />
-
-		<nav class="keys" aria-label="Destinations">
+	<footer class="hud-bottom" bind:this={deckEl}>
+		<nav class="stars" aria-label="Destinations">
 			{#each SYSTEMS as system, i}
 				<a
 					href={`/${system.slug}`}
-					class="key"
 					class:is-active={currentSystem === system.slug}
 					aria-current={currentSystem === system.slug ? 'location' : undefined}
 					style={`--led:${system.star.corona}`}
 				>
-					<span class="key__led" aria-hidden="true"></span>
-					<span class="key__legend">{system.name}</span>
-					<span class="key__shortcut" aria-hidden="true">{i + 1}</span>
+					<kbd aria-hidden="true">{i + 1}</kbd>{system.name}
 				</a>
 			{/each}
 		</nav>
-
-		<div class="readout crt" aria-hidden="true">
-			<div class="crt__glass">
-				<p><span>HDG</span><b>{fmt(telemetry.heading)}°</b></p>
-				<p><span>RNG</span><b>{fmt(telemetry.range)}</b></p>
-				<p><span>VEL</span><b>{fmt(telemetry.velocity / 1000, 3)}c</b></p>
-				<p><span>MODE</span><b class:blink={telemetry.mode === 'warp'}>{telemetry.mode.toUpperCase()}</b></p>
-				<p class="readout__gpu"><span>{backend === 'webgpu' ? 'WEBGPU' : 'WEBGL2'}</span><b>{fps ? `${fps} FPS` : '-- FPS'}</b></p>
-			</div>
-		</div>
+		{#if status === 'ready'}
+			<p class="telemetry" aria-hidden="true">
+				HDG {Math.round(telemetry.heading).toString().padStart(3, '0')}
+				<span class:blink={telemetry.mode === 'warp'}>{telemetry.mode}</span>
+				{fps ? `${fps} fps` : ''}
+			</p>
+		{/if}
 	</footer>
 
 	{#if hintVisible && status === 'ready'}

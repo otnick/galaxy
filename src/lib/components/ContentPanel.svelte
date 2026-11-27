@@ -52,14 +52,6 @@
 		}
 	};
 
-	const channel = $derived(
-		focus.level === 'universe'
-			? 'CH 00 · OVERVIEW'
-			: focus.level === 'system'
-				? `CH ${String(focus.system.bodies.length).padStart(2, '0')} · ${focus.system.name}`
-				: `${focus.system.name} / ${focus.body.name}`
-	);
-
 	const bodyIndex = $derived(focus.level === 'body' ? focus.system.bodies.indexOf(focus.body) : -1);
 	const prevBody = $derived(
 		focus.level === 'body' && focus.system.bodies.length > 1
@@ -74,15 +66,11 @@
 	const isExternal = (href: string) => href.startsWith('http');
 </script>
 
-<section class="mfd crt" class:mfd--static={fallback} aria-live="polite">
-	<header class="mfd__bezel">
-		<span class="mfd__channel">{channel}</span>
-		<button class="mfd__toggle" type="button" onclick={() => (collapsed = !collapsed)} aria-expanded={!collapsed}>
-			{collapsed ? 'Expand' : 'Dim'}
-		</button>
-	</header>
-
-	<div class="crt__glass mfd__glass">
+<section class="screen" class:screen--static={fallback} aria-live="polite">
+	<button class="screen__toggle" type="button" onclick={() => (collapsed = !collapsed)} aria-expanded={!collapsed}>
+		{collapsed ? 'Show' : 'Hide'}
+	</button>
+	<div class="screen__glass">
 		{#key focusKey(focus)}
 			<article class="mfd__page">
 				{#if focus.level === 'universe'}

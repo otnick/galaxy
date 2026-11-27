@@ -16,6 +16,7 @@ import {
 	createMoonMaterial,
 	createOrbitMaterial,
 	createParticleMaterial,
+	createNebulaMaterial,
 	createPlanetMaterial,
 	createRingMaterial,
 	createSkyMaterial,
@@ -257,6 +258,7 @@ export class UniverseEngine {
 		const debug = new URLSearchParams(location.search).get('debug') ?? '';
 		if (!debug.includes('nosky')) this.buildSky();
 		if (!debug.includes('nodust')) this.buildGalaxy();
+		if (!debug.includes('nofog')) this.buildNebula();
 		for (const [index, system] of SYSTEMS.entries()) this.buildSystem(system, index);
 		this.buildCommunity();
 		this.buildPipeline();
@@ -378,6 +380,69 @@ export class UniverseEngine {
 		strength.value = 0.18;
 		this.coreGlow = { sprite, strength };
 		this.scene.add(sprite);
+	}
+
+	private buildNebula() {
+		const lp = this.options.lowPower;
+		const rand = mulberry(1337);
+		const palette = ['#5b2a9e', '#1f5f8a', '#9e2a6a', '#2a7f86', '#6a3ab8', '#b0482c'].map((h) => new THREE.Color(h));
+		const clouds: { p: [number, number, number]; s: number; c: THREE.Color }[] = [];
+		const pick = () => palette[Math.floor(rand() * palette.length)];
+		// along the spiral arms
+		const armCount = lp ? 22 : 46;
+		for (let i = 0; i < armCount; i++) {
+			const rNorm = 0.15 + rand() * 0.85;
+			const r = 200 + rNorm * 2600;
+			const arm = Math.floor(rand() * 4);
+			const angle = (arm / 4) * TAU + r * 0.0028 + gauss(rand) * 0.18;
+			clouds.push({
+				p: [Math.cos(angle) * r, gauss(rand) * 40, Math.sin(angle) * r - 300],
+				s: 500 + rand() * 900,
+				c: pick()
+			});
+		}
+		// a veil around every star, so the haze is part of each close-up too
+		const perSystem = lp ? 3 : 6;
+		for (const system of SYSTEMS) {
+			const [x, y, z] = system.position;
+			for (let i = 0; i < perSystem; i++) {
+				const a = rand() * TAU;
+				const r = 120 + rand() * 260;
+				clouds.push({
+					p: [x + Math.cos(a) * r, y + gauss(rand) * 60, z + Math.sin(a) * r],
+					s: 260 + rand() * 380,
+					c: new THREE.Color(system.star.corona).lerp(pick(), 0.55)
+				});
+			}
+		}
+		const count = clouds.length;
+		const pos = new Float32Array(count * 3);
+		const size = new Float32Array(count);
+		const colorArr = new Float32Array(count * 3);
+		const seed = new Float32Array(count);
+		clouds.forEach((cl, i) => {
+			pos.set(cl.p, i * 3);
+			size[i] = cl.s;
+			const b = 0.16 + rand() * 0.14;
+			colorArr.set([cl.c.r * b, cl.c.g * b, cl.c.b * b], i * 3);
+			seed[i] = rand();
+		});
+		const base = new THREE.PlaneGeometry(1, 1);
+		const geometry = new THREE.InstancedBufferGeometry();
+		geometry.index = base.index;
+		geometry.setAttribute('position', base.getAttribute('position'));
+		geometry.setAttribute('uv', base.getAttribute('uv'));
+		geometry.setAttribute('aPos', new THREE.InstancedBufferAttribute(pos, 3));
+		geometry.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 1));
+		geometry.setAttribute('aColor', new THREE.InstancedBufferAttribute(colorArr, 3));
+		geometry.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 1));
+		geometry.instanceCount = count;
+		const { material } = createNebulaMaterial(lp);
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.frustumCulled = false;
+		mesh.renderOrder = -1;
+		this.scene.add(mesh);
+		this.disposables.push(geometry, material);
 	}
 
 	private particleMesh(

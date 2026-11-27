@@ -376,6 +376,42 @@ export const createParticleMaterial = (options: { rotationSpeed?: number; nearFa
 	return { material, brightness };
 };
 
+/**
+ * Volumetric-looking nebula clouds: large additive billboards whose shape
+ * comes from fractal noise, so every cloud is unique. They fade out when the
+ * camera gets close, which keeps the haze around a target, never in front of it.
+ */
+export const createNebulaMaterial = (lowPower: boolean) => {
+	const material = new THREE.SpriteNodeMaterial({
+		transparent: true,
+		depthWrite: false,
+		blending: THREE.AdditiveBlending
+	});
+	const brightness = uniform(1);
+	const aPos = attribute('aPos', 'vec3');
+	const aSize = attribute('aSize', 'float');
+	const aColor = attribute('aColor', 'vec3');
+	const aSeed = attribute('aSeed', 'float');
+	material.positionNode = aPos;
+	material.scaleNode = aSize;
+
+	const p = uv().sub(0.5).mul(2.0);
+	const d = length(p);
+	const drift = time.mul(0.008);
+	const q = vec3(p.mul(1.4), aSeed.mul(37.0).add(drift));
+	const warp = mx_fractal_noise_float(q.mul(0.8), 2, 2.0, 0.5);
+	const n = mx_fractal_noise_float(q.add(warp.mul(0.9)), lowPower ? 2 : 4, 2.0, 0.55).mul(0.5).add(0.5);
+	const falloff = pow(max(oneMinus(d), 0.0), 1.6);
+	const density = smoothstep(0.38, 0.85, n).mul(falloff);
+	const dist = length(aPos.sub(cameraPosition));
+	const near = smoothstep(aSize.mul(0.25), aSize.mul(0.9), dist);
+	// denser cores glow warmer and brighter
+	const tint = mix(aColor, aColor.mul(vec3(1.5, 1.2, 1.35)), smoothstep(0.6, 0.95, n));
+	material.colorNode = vec4(tint.mul(brightness), 1);
+	material.opacityNode = density.mul(near).mul(brightness).mul(0.55);
+	return { material, brightness };
+};
+
 /* ------------------------------------------------------------------ */
 /* Sky                                                                 */
 /* ------------------------------------------------------------------ */
@@ -390,10 +426,12 @@ export const createSkyMaterial = () => {
 		const violet = vec3(0.09, 0.035, 0.16);
 		const teal = vec3(0.015, 0.07, 0.11);
 		const rose = vec3(0.14, 0.03, 0.07);
-		const neb = mix(violet, teal, smoothstep(0.35, 0.7, n2)).mul(pow(n1, 2.2));
+		const neb = mix(violet, teal, smoothstep(0.35, 0.7, n2)).mul(pow(n1, 1.6));
 		const glow = mix(neb, rose, smoothstep(0.62, 0.95, n1.mul(n2).mul(1.6)).mul(0.6)).mul(band.mul(1.4).add(0.25));
 		const base = vec3(0.004, 0.006, 0.014);
-		return base.add(glow.mul(0.85));
+		// a second, wider veil so the haze reaches well beyond the galactic band
+		const veil = mix(teal, violet, n1).mul(smoothstep(0.42, 0.85, n2)).mul(0.55);
+		return base.add(glow.mul(1.25)).add(veil);
 	})();
 	return material;
 };
