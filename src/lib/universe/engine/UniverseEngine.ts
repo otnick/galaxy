@@ -10,6 +10,8 @@ import {
 	createAtmosphereMaterial,
 	createBeamMaterial,
 	createBeaconMaterial,
+	createCloudMaterial,
+	createCommunityMaterial,
 	createCoronaMaterial,
 	createMoonMaterial,
 	createOrbitMaterial,
@@ -29,6 +31,19 @@ export type EngineEvents = {
 	onHover?: (info: { title: string; subtitle?: string } | null) => void;
 	onInteract?: () => void;
 	onFps?: (fps: number) => void;
+	onTelemetry?: (t: Telemetry) => void;
+};
+
+export type Telemetry = {
+	/** camera heading in degrees, 0–360 */
+	heading: number;
+	/** distance to the current target */
+	range: number;
+	/** camera speed in units per second */
+	velocity: number;
+	/** 0 at rest, 1 at full warp */
+	warp: number;
+	mode: 'hold' | 'cruise' | 'warp';
 };
 
 export type EngineOptions = {
@@ -188,6 +203,11 @@ export class UniverseEngine {
 	private pinchStart = 0;
 	private pointer = new THREE.Vector2(-9999, -9999);
 	private hovered: Pickable | null = null;
+	private reticleHover: HTMLElement;
+	private reticleLock: HTMLElement;
+	private lastCamera = new THREE.Vector3();
+	private velocitySmoothed = 0;
+	private telemetryClock = 0;
 	private coarse = false;
 
 	private disposed = false;
@@ -197,6 +217,7 @@ export class UniverseEngine {
 	private tmp2 = new THREE.Vector3();
 	private projected = new THREE.Vector3();
 	private listeners: Array<() => void> = [];
+	private disposables: Array<{ dispose: () => void }> = [];
 	private lastFps = 0;
 	public backend: 'webgpu' | 'webgl' = 'webgl';
 
@@ -209,6 +230,8 @@ export class UniverseEngine {
 		this.communityTip = document.createElement('div');
 		this.communityTip.className = 'u-tip';
 		this.labelLayer.appendChild(this.communityTip);
+		this.reticleHover = this.makeReticle('u-reticle u-reticle--hover');
+		this.reticleLock = this.makeReticle('u-reticle u-reticle--lock');
 	}
 
 	/* -------------------------------- setup -------------------------------- */
@@ -217,8 +240,7 @@ export class UniverseEngine {
 		const renderer = new THREE.WebGPURenderer({
 			canvas: this.canvas,
 			antialias: false,
-			alpha: false,
-			powerPreference: 'high-performance'
+			alpha: false
 		});
 		await renderer.init();
 		this.renderer = renderer;
@@ -270,12 +292,16 @@ export class UniverseEngine {
 	}
 
 	private buildSky() {
-		// unit sphere scaled up: keeps positionLocal normalised (precision on mobile GPUs)
-		const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), createSkyMaterial());
-		sky.scale.setScalar(14000);
-		sky.frustumCulled = false;
-		sky.renderOrder = -10;
-		this.scene.add(sky);
+		// The nebula is static, so it is rendered once into a cube map instead of
+		// evaluating 9 noise octaves for every pixel on every frame.
+		const skyScene = new THREE.Scene();
+		skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), createSkyMaterial()));
+		const cubeSize = this.options.lowPower ? 512 : 1024;
+		const target = new THREE.CubeRenderTarget(cubeSize, { type: THREE.HalfFloatType, generateMipmaps: true });
+		const cubeCamera = new THREE.CubeCamera(0.1, 10, target);
+		cubeCamera.update(this.renderer, skyScene);
+		this.scene.background = target.texture;
+		this.disposables.push(target, ...skyScene.children.map((m) => (m as THREE.Mesh).geometry));
 
 		// distant stars
 		const count = this.options.lowPower ? 2600 : 6000;
@@ -400,8 +426,8 @@ export class UniverseEngine {
 			beams = new THREE.Group();
 			const beamMat = createBeamMaterial(star.corona);
 			for (const dir of [1, -1]) {
-				const geo = new THREE.CylinderGeometry(star.radius * 0.25, star.radius * 2.4, star.radius * 26, 32, 1, true);
-				geo.translate(0, (star.radius * 13 + star.radius * 0.6) * 1, 0);
+				const geo = new THREE.CylinderGeometry(star.radius * 0.2, star.radius * 1.6, star.radius * 15, 32, 1, true);
+				geo.translate(0, star.radius * 7.5 + star.radius * 0.6, 0);
 				const beam = new THREE.Mesh(geo, beamMat);
 				if (dir < 0) beam.rotation.z = Math.PI;
 				beams.add(beam);
@@ -474,12 +500,19 @@ export class UniverseEngine {
 		const carrier = new THREE.Group();
 		pivot.add(carrier);
 
-		const { material, uniforms } = createPlanetMaterial(v, seed, sunWorld);
+		const { material, uniforms } = createPlanetMaterial(v, seed, sunWorld, this.options.lowPower);
 		const segments = this.options.lowPower ? 48 : 96;
 		const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, segments, segments / 2), material);
 		mesh.scale.setScalar(v.radius);
-		mesh.rotation.z = 0.35;
 		carrier.add(mesh);
+
+		if (v.kind === 'terran' || v.kind === 'ocean') {
+			const clouds = new THREE.Mesh(
+				new THREE.SphereGeometry(1.018, segments, segments / 2),
+				createCloudMaterial(uniforms.sunPosition, seed, v.kind === 'ocean' ? 0.55 : 0.45)
+			);
+			mesh.add(clouds);
+		}
 
 		if (v.atmosphere) {
 			const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.045, segments, segments / 2), createAtmosphereMaterial(v.atmosphere, uniforms.sunPosition));
@@ -537,8 +570,9 @@ export class UniverseEngine {
 		const orbitSystem = this.systems.get('orbit');
 		if (!orbitSystem) return;
 		const sun = uniform(orbitSystem.center.clone());
-		const material = createMoonMaterial(sun, 0.7);
-		const mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 2), material, 600);
+		const geometry = new THREE.IcosahedronGeometry(1, 2);
+		geometry.setAttribute('aTint', new THREE.InstancedBufferAttribute(new Float32Array(600 * 3), 3));
+		const mesh = new THREE.InstancedMesh(geometry, createCommunityMaterial(sun), 600);
 		mesh.count = 0;
 		mesh.frustumCulled = false;
 		mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -550,13 +584,13 @@ export class UniverseEngine {
 		this.communityData = planets.slice(0, 600);
 		if (!this.community) return;
 		const c = new THREE.Color();
+		const tint = this.community.geometry.getAttribute('aTint') as THREE.InstancedBufferAttribute;
 		for (const [i, p] of this.communityData.entries()) {
-			c.set(p.color);
-			c.multiplyScalar(1.6);
-			this.community.setColorAt(i, c);
+			c.set(/^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#9fb3ff');
+			tint.setXYZ(i, c.r * 1.4, c.g * 1.4, c.b * 1.4);
 		}
+		tint.needsUpdate = true;
 		this.community.count = this.communityData.length;
-		if (this.community.instanceColor) this.community.instanceColor.needsUpdate = true;
 		// replace community pickables
 		this.pickables = this.pickables.filter((p) => p.level !== 'community');
 		const orbitSystem = this.systems.get('orbit')!;
@@ -583,6 +617,15 @@ export class UniverseEngine {
 		const a = (p.slot / PER_RING) * TAU + p.orbitRing * 0.37 + t * (0.012 + p.speed * 0.02) * (this.options.reducedMotion ? 0 : 1);
 		const wobble = Math.sin(a * 3 + p.id) * 2.5;
 		return out.set(Math.cos(a) * r, wobble, Math.sin(a) * r);
+	}
+
+	private makeReticle(className: string) {
+		const el = document.createElement('div');
+		el.className = className;
+		el.innerHTML = '<i></i><i></i><i></i><i></i><span class="u-reticle__tag"></span>';
+		el.setAttribute('aria-hidden', 'true');
+		this.labelLayer.appendChild(el);
+		return el;
 	}
 
 	private makeLabel(className: string, title: string, subtitle?: string) {
@@ -853,6 +896,8 @@ export class UniverseEngine {
 		this.updateHover();
 		this.updateVisuals(dt);
 		this.updateLabels();
+		this.updateReticles();
+		this.updateTelemetry(dt);
 		this.pipeline.render();
 		this.trackPerformance(dt);
 	};
@@ -864,7 +909,6 @@ export class UniverseEngine {
 			for (const b of sys.bodies) {
 				b.angle += b.body.visual.speed * dt;
 				b.carrier.position.set(Math.cos(b.angle) * b.body.visual.orbit, 0, Math.sin(b.angle) * b.body.visual.orbit);
-				b.mesh.rotation.y += dt * 0.08;
 				for (const m of b.moons) {
 					m.angle += m.speed * dt;
 					m.mesh.position.set(Math.cos(m.angle) * m.radius, Math.sin(m.angle) * m.radius * m.tilt, Math.sin(m.angle) * m.radius);
@@ -882,7 +926,7 @@ export class UniverseEngine {
 		const scale = new THREE.Vector3();
 		for (const [i, p] of this.communityData.entries()) {
 			this.communityPosition(p, pos);
-			const s = (0.5 + p.size * 0.14) * (i === this.communityHover ? 1.8 : 1);
+			const s = (1.1 + p.size * 0.22) * (i === this.communityHover ? 1.8 : 1);
 			scale.setScalar(s);
 			this.matrix.compose(pos, quat, scale);
 			this.community.setMatrixAt(i, this.matrix);
@@ -1009,7 +1053,7 @@ export class UniverseEngine {
 			const starPx = (sys.system.star.radius / dist) * fovScale;
 			let starOpacity = 0;
 			if (f.level === 'universe') starOpacity = 1;
-			else if (!isCurrent) starOpacity = 0.55;
+			else if (!isCurrent && f.level === 'system') starOpacity = 0.55;
 			sys.label.classList.toggle('is-far', !isCurrent && f.level !== 'universe');
 			place(sys.label, sys.center, starPx + 14, settled ? starOpacity : 0);
 
@@ -1020,10 +1064,91 @@ export class UniverseEngine {
 					else if (f.level === 'body' && f.body.slug !== b.body.slug) o = 0.6;
 				}
 				const bd = b.world.distanceTo(this.camera.position);
+				if (o > 0 && this.behindStar(b.world, sys, bd)) o *= 0.2;
 				const px = (b.extent / bd) * fovScale;
 				place(b.label, b.world, Math.max(px, 4) + 10, o);
 			}
 		}
+	}
+
+	private placeReticle(el: HTMLElement, world: THREE.Vector3 | null, radius: number, tag: string) {
+		if (!world) {
+			el.classList.remove('is-on');
+			return;
+		}
+		this.projected.copy(world).project(this.camera);
+		if (this.projected.z > 1) {
+			el.classList.remove('is-on');
+			return;
+		}
+		const { w, h } = this.size;
+		const fovScale = (h / 2) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+		const dist = world.distanceTo(this.camera.position);
+		const size = clamp((radius / dist) * fovScale * 2.6, 26, Math.min(w, h) * 0.7);
+		const x = ((this.projected.x + 1) / 2) * w;
+		const y = ((1 - this.projected.y) / 2) * h;
+		el.style.transform = `translate3d(${(x - size / 2).toFixed(1)}px, ${(y - size / 2).toFixed(1)}px, 0)`;
+		el.style.width = el.style.height = `${size.toFixed(1)}px`;
+		const tagEl = el.lastElementChild as HTMLElement;
+		if (tagEl.textContent !== tag) tagEl.textContent = tag;
+		el.classList.add('is-on');
+	}
+
+	private updateReticles() {
+		const f = this.focus;
+		const settled = !this.flight || this.flight.t > 0.85;
+		let lockWorld: THREE.Vector3 | null = null;
+		let lockRadius = 1;
+		let lockTag = '';
+		if (settled && f.level === 'body') {
+			const node = this.systems.get(f.system.slug)?.bodies.find((b) => b.body.slug === f.body.slug);
+			if (node) {
+				lockWorld = node.world;
+				lockRadius = node.extent;
+				lockTag = `LOCK · ${node.body.name}`;
+			}
+		}
+		this.placeReticle(this.reticleLock, lockWorld, lockRadius, lockTag);
+		const h = this.hovered && this.hovered.level !== 'community' ? this.hovered : null;
+		this.placeReticle(this.reticleHover, h ? h.position() : null, h ? h.radius : 1, h ? `SET COURSE · ${this.pickName(h)}` : '');
+	}
+
+	private pickName(p: Pickable) {
+		const [, sys, body] = p.path.split('/');
+		const node = this.systems.get(sys);
+		if (!node) return '';
+		if (!body) return node.system.name;
+		return node.bodies.find((b) => b.body.slug === body)?.body.name ?? '';
+	}
+
+	private updateTelemetry(dt: number) {
+		const moved = this.camera.position.distanceTo(this.lastCamera);
+		this.lastCamera.copy(this.camera.position);
+		if (dt > 0) this.velocitySmoothed = damp(this.velocitySmoothed, moved / dt, 6, dt);
+		this.telemetryClock += dt;
+		if (this.telemetryClock < 0.08 || !this.events.onTelemetry) return;
+		this.telemetryClock = 0;
+		let heading = THREE.MathUtils.radToDeg(this.azimuth) % 360;
+		if (heading < 0) heading += 360;
+		const warp = this.warp.value / 1.6;
+		this.events.onTelemetry({
+			heading,
+			range: this.distance,
+			velocity: this.velocitySmoothed,
+			warp,
+			mode: this.flight ? (warp > 0.2 ? 'warp' : 'cruise') : 'hold'
+		});
+	}
+
+	/** true when the star sits between the camera and the given point */
+	private ray = new THREE.Ray();
+	private behindStar(point: THREE.Vector3, sys: SystemNode, pointDistance: number) {
+		const starDistance = sys.center.distanceTo(this.camera.position);
+		if (starDistance > pointDistance) return false;
+		this.ray.origin.copy(this.camera.position);
+		this.ray.direction.copy(point).sub(this.camera.position).normalize();
+		const r = sys.system.star.radius * 1.4;
+		return this.ray.distanceSqToPoint(sys.center) < r * r;
 	}
 
 	private trackPerformance(dt: number) {
@@ -1056,6 +1181,7 @@ export class UniverseEngine {
 			if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
 			else mat?.dispose();
 		});
+		this.disposables.forEach((d) => d.dispose());
 		this.pipeline?.dispose();
 		this.renderer?.dispose();
 		this.labelLayer.innerHTML = '';

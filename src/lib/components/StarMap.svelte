@@ -1,41 +1,42 @@
 <script lang="ts">
 	import { SYSTEMS, type Focus } from '$lib/universe/content';
 
-	let { focus }: { focus: Focus } = $props();
+	let { focus, heading }: { focus: Focus; heading: number } = $props();
 
-	// top-down projection of the galaxy (x/z plane)
-	const xs = SYSTEMS.map((s) => s.position[0]);
-	const zs = SYSTEMS.map((s) => s.position[2]);
-	const minX = Math.min(...xs);
-	const maxX = Math.max(...xs);
-	const minZ = Math.min(...zs);
-	const maxZ = Math.max(...zs);
-	const W = 132;
-	const H = 92;
-	const pad = 14;
-	const px = (x: number) => pad + ((x - minX) / (maxX - minX)) * (W - pad * 2);
-	const pz = (z: number) => pad + ((z - minZ) / (maxZ - minZ)) * (H - pad * 2);
+	// radar scope: top-down projection of the galaxy (x/z plane), centred on the home star
+	const R = 46;
+	const maxR = Math.max(...SYSTEMS.map((s) => Math.hypot(s.position[0], s.position[2])));
+	const blip = (s: (typeof SYSTEMS)[number]) => ({
+		x: 50 + (s.position[0] / maxR) * R * 0.82,
+		y: 50 + (s.position[2] / maxR) * R * 0.82
+	});
 	const current = $derived(focus.level === 'universe' ? null : focus.system.slug);
 </script>
 
-<nav class="starmap" aria-label="Star map">
-	<svg viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-		{#each SYSTEMS as a, i}
-			{#if i > 0}
-				<line x1={px(SYSTEMS[0].position[0])} y1={pz(SYSTEMS[0].position[2])} x2={px(a.position[0])} y2={pz(a.position[2])} />
-			{/if}
+<nav class="radar crt" aria-label="Star map">
+	<div class="crt__glass radar__glass">
+		<svg viewBox="0 0 100 100" aria-hidden="true">
+			<circle cx="50" cy="50" r="46" />
+			<circle cx="50" cy="50" r="30" />
+			<circle cx="50" cy="50" r="14" />
+			<path d="M50 4v92M4 50h92" />
+			<g style={`transform: rotate(${-heading}deg); transform-origin: 50px 50px`}>
+				<path class="radar__fov" d="M50 50 L36 10 A42 42 0 0 1 64 10 Z" />
+			</g>
+		</svg>
+		<span class="radar__sweep" aria-hidden="true"></span>
+		{#each SYSTEMS as system, i}
+			{@const p = blip(system)}
+			<a
+				href={`/${system.slug}`}
+				class="radar__blip"
+				class:is-current={current === system.slug}
+				style={`left:${p.x}%; top:${p.y}%`}
+				aria-current={current === system.slug ? 'location' : undefined}
+				title={`${i + 1} · ${system.name}`}
+			>
+				<span class="sr-only">{system.name}</span>
+			</a>
 		{/each}
-	</svg>
-	{#each SYSTEMS as system, i}
-		<a
-			href={`/${system.slug}`}
-			class="starmap__star"
-			class:is-current={current === system.slug}
-			style={`left:${px(system.position[0])}px; top:${pz(system.position[2])}px; --c:${system.star.corona}`}
-			aria-current={current === system.slug ? 'location' : undefined}
-			title={`${i + 1} · ${system.name}`}
-		>
-			<span class="sr-only">{system.name}</span>
-		</a>
-	{/each}
+	</div>
 </nav>

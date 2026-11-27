@@ -20,6 +20,7 @@ import {
 	max,
 	mix,
 	mx_fractal_noise_float,
+	mx_fractal_noise_vec3,
 	mx_noise_float,
 	mx_worley_noise_float,
 	normalView,
@@ -49,7 +50,7 @@ const col = (hex: string) => color(new THREE.Color(hex));
 
 export const createStarMaterial = (star: StarVisual, seed: number) => {
 	const material = new THREE.MeshBasicNodeMaterial();
-	const intensity = uniform(star.kind === 'pulsar' ? 2.4 : 2.2);
+	const intensity = uniform(star.kind === 'pulsar' ? 1.9 : 1.55);
 	const [deep, mid, hot] = star.palette.map(col);
 	const offset = vec3(seed * 13.1, seed * 7.7, seed * 3.3);
 
@@ -115,7 +116,7 @@ export const createBeamMaterial = (hex: string) => {
 	const fade = pow(along, 1.6).mul(smoothstep(0.0, 0.08, v.y));
 	const flicker = sin(time.mul(5.0)).mul(0.3).add(0.7);
 	material.colorNode = col(hex).mul(2.0).mul(flicker);
-	material.opacityNode = fade.mul(0.35);
+	material.opacityNode = fade.mul(0.22);
 	return material;
 };
 
@@ -130,95 +131,141 @@ export type PlanetUniforms = {
 	highlight: { value: number };
 };
 
-export const createPlanetMaterial = (visual: BodyVisual, seed: number, sunPosition: THREE.Vector3) => {
+/** rotate around the Y axis */
+const rotY = (v: THREE.Node<'vec3'>, a: THREE.Node<'float'>) => {
+	const c = cos(a);
+	const s = sin(a);
+	return vec3(v.x.mul(c).sub(v.z.mul(s)), v.y, v.x.mul(s).add(v.z.mul(c)));
+};
+
+/**
+ * Planet surface. Meshes are not rotated (only scaled), so the local
+ * position direction equals the world normal; spin is applied in the shader.
+ * Relief shading samples the height field once more, shifted towards the sun,
+ * which gives crisp, directional terrain detail without normal maps.
+ */
+export const createPlanetMaterial = (visual: BodyVisual, seed: number, sunPosition: THREE.Vector3, lowPower = false) => {
 	const material = new THREE.MeshBasicNodeMaterial();
 	const sun = uniform(sunPosition.clone());
 	const highlight = uniform(0);
 	const [c0, c1, c2] = visual.palette.map(col);
 	const atmo = col(visual.atmosphere ?? visual.palette[2]);
 	const offset = vec3(seed * 17.3, seed * 9.1, seed * 4.7);
+	const spin = time.mul(0.015 + (seed % 1) * 0.02);
 
 	material.colorNode = Fn(() => {
-		const p = normalize(positionLocal);
-		const q = p.add(offset);
 		const N = normalize(normalWorld);
 		const L = normalize(sun.sub(positionWorld));
 		const V = normalize(cameraPosition.sub(positionWorld));
 		const ndl = dot(N, L);
-		const light = smoothstep(-0.18, 0.9, ndl);
+		// tangent direction pointing towards the sun, in surface (spun) space
+		const Lt = rotY(normalize(L.sub(N.mul(ndl)).add(vec3(0.00001))), spin);
+		const p = rotY(normalize(positionLocal), spin);
+		const q = p.add(offset);
 
 		let albedo: THREE.Node<'vec3'> = vec3(0);
 		let water: THREE.Node<'float'> = float(0);
 		let emissive: THREE.Node<'vec3'> = vec3(0);
+		let relief: THREE.Node<'float'> = float(0);
+		const eps = 0.012;
 
 		switch (visual.kind) {
 			case 'gas': {
-				const warp = mx_fractal_noise_float(q.mul(vec3(2.0, 6.0, 2.0)).add(vec3(time.mul(0.01), 0, 0)), 4);
-				const bands = sin(p.y.mul(13.0).add(warp.mul(3.2))).mul(0.5).add(0.5);
-				const fine = mx_noise_float(q.mul(vec3(1.5, 40.0, 1.5))).mul(0.5).add(0.5);
-				albedo = mix(mix(c0, c1, bands), c2, smoothstep(0.55, 1.0, fine.mul(bands)));
-				// storm eye
-				const storm = smoothstep(0.22, 0.0, length(p.sub(normalize(vec3(0.7, -0.25, 0.65)))));
-				albedo = mix(albedo, c2.mul(1.1), storm.mul(0.8));
+				const turb = mx_fractal_noise_vec3(q.mul(vec3(1.2, 3.5, 1.2)).add(vec3(time.mul(0.004), 0, 0)), 3).mul(0.18);
+				const lat = p.y.add(turb.y);
+				const bands = sin(lat.mul(11.0)).mul(0.5).add(0.5);
+				const bands2 = sin(lat.mul(27.0).add(turb.x.mul(6.0))).mul(0.5).add(0.5);
+				const t = smoothstep(0.15, 0.85, bands.mul(0.7).add(bands2.mul(0.3)));
+				albedo = mix(c0, c1, t);
+				albedo = mix(albedo, c2, smoothstep(0.55, 0.95, bands2).mul(0.55));
+				const stormCenter = normalize(vec3(0.62, -0.28, 0.73));
+				const storm = smoothstep(0.2, 0.02, length(p.sub(stormCenter)));
+				albedo = mix(albedo, mix(c2, c1, 0.35), storm.mul(0.9));
 				break;
 			}
 			case 'lava': {
-				const n = mx_fractal_noise_float(q.mul(3.2), 5);
-				const cracks = smoothstep(0.08, 0.0, abs(n));
-				albedo = mix(c0, c1.mul(0.25), smoothstep(-0.5, 0.6, n));
-				const pulse = sin(time.mul(1.3).add(n.mul(8.0))).mul(0.25).add(0.75);
-				emissive = c1.mul(cracks).mul(3.2).mul(pulse).add(c2.mul(pow(cracks, 4.0)).mul(2.0));
+				const warp = mx_fractal_noise_vec3(q.mul(1.4), 2).mul(0.25);
+				const h = (x: THREE.Node<'vec3'>) => mx_fractal_noise_float(x.add(warp).mul(2.6), 5);
+				const n = h(q);
+				if (!lowPower) relief = n.sub(h(q.add(Lt.mul(eps))));
+				const cracks = smoothstep(0.06, 0.0, abs(n));
+				albedo = mix(c0, c1.mul(0.18), smoothstep(-0.5, 0.6, n));
+				const pulse = sin(time.mul(1.1).add(n.mul(7.0))).mul(0.2).add(0.8);
+				emissive = c1.mul(cracks).mul(2.6).mul(pulse).add(c2.mul(pow(cracks, 6.0)).mul(1.6));
 				break;
 			}
 			case 'ice': {
-				const n = mx_fractal_noise_float(q.mul(2.4), 5);
-				const lines = smoothstep(0.035, 0.0, abs(mx_noise_float(q.mul(6.0))));
-				albedo = mix(c1, c2, smoothstep(-0.4, 0.5, n));
-				albedo = mix(albedo, c0, lines.mul(0.7));
-				water = float(0.35);
+				const h = (x: THREE.Node<'vec3'>) => mx_fractal_noise_float(x.mul(2.0), 4);
+				const n = h(q);
+				if (!lowPower) relief = n.sub(h(q.add(Lt.mul(eps)))).mul(0.6);
+				const lines = smoothstep(0.025, 0.0, abs(mx_noise_float(q.mul(5.0).add(n.mul(0.6)))));
+				albedo = mix(c1, c2, smoothstep(-0.45, 0.45, n));
+				albedo = mix(albedo, c0, lines.mul(0.55));
+				water = float(0.25);
 				break;
 			}
 			case 'rock': {
-				const n = mx_fractal_noise_float(q.mul(3.0), 5);
-				const crater = mx_worley_noise_float(q.mul(5.0));
-				const rim = smoothstep(0.05, 0.18, crater).mul(smoothstep(0.32, 0.2, crater));
-				albedo = mix(c0, c1, smoothstep(-0.6, 0.6, n));
-				albedo = mix(albedo, c2, rim.mul(0.55));
-				albedo = albedo.mul(smoothstep(0.0, 0.12, crater).mul(0.4).add(0.6));
+				const h = (x: THREE.Node<'vec3'>) => {
+					const crater = mx_worley_noise_float(x.mul(4.2));
+					const bowl = smoothstep(0.0, 0.3, crater).mul(0.5);
+					return mx_fractal_noise_float(x.mul(2.6), 5).mul(0.45).add(bowl);
+				};
+				const n = h(q);
+				if (!lowPower) relief = n.sub(h(q.add(Lt.mul(eps)))).mul(1.4);
+				albedo = mix(c0, c1, smoothstep(0.0, 0.6, n));
+				albedo = mix(albedo, c2, smoothstep(0.45, 0.75, n).mul(0.6));
 				break;
 			}
 			default: {
-				// terran + ocean: continents, coasts, ice caps, clouds
-				const h = mx_fractal_noise_float(q.mul(1.8), 6, 2.0, 0.5);
-				const seaLevel = visual.kind === 'ocean' ? float(0.22) : float(0.0);
-				water = smoothstep(seaLevel.add(0.02), seaLevel.sub(0.02), h);
-				const deep = mix(c0.mul(0.6), c0, smoothstep(-0.6, seaLevel, h));
-				const shore = smoothstep(seaLevel, seaLevel.add(0.08), h);
-				const land = mix(c1, c2, smoothstep(seaLevel.add(0.15), 0.7, h));
-				albedo = mix(deep, mix(c2.mul(0.9), land, shore), oneMinus(water));
-				const caps = smoothstep(0.78, 0.9, abs(p.y).add(h.mul(0.08)));
-				albedo = mix(albedo, vec3(0.92, 0.96, 1.0), caps);
+				// terran + ocean: domain-warped continents, coasts, ice caps
+				const warp = mx_fractal_noise_vec3(q.mul(1.1), 2).mul(0.32);
+				const h = (x: THREE.Node<'vec3'>) => mx_fractal_noise_float(x.add(warp).mul(1.5), lowPower ? 4 : 5, 2.0, 0.5);
+				const n = h(q);
+				const seaLevel = visual.kind === 'ocean' ? 0.2 : 0.02;
+				water = smoothstep(seaLevel + 0.012, seaLevel - 0.012, n);
+				if (!lowPower) relief = n.sub(h(q.add(Lt.mul(eps)))).mul(oneMinus(water));
+				const depth = smoothstep(-0.7, seaLevel, n);
+				const sea = mix(c0.mul(0.55), c0.mul(1.25), pow(depth, 2.0));
+				const coast = smoothstep(seaLevel, seaLevel + 0.05, n);
+				const land = mix(mix(c2.mul(0.85), c1, coast), c2, smoothstep(seaLevel + 0.22, 0.75, n));
+				albedo = mix(land, sea, water);
+				const caps = smoothstep(0.8, 0.86, abs(p.y).add(n.mul(0.06)));
+				albedo = mix(albedo, vec3(0.93, 0.96, 1.0), caps);
 				water = water.mul(oneMinus(caps));
-				const clouds = smoothstep(
-					0.05,
-					0.45,
-					mx_fractal_noise_float(q.mul(vec3(2.5, 4.0, 2.5)).add(vec3(time.mul(0.012), 0, 0)), 4)
-				);
-				albedo = mix(albedo, vec3(1.0), clouds.mul(0.75));
-				water = water.mul(oneMinus(clouds));
 			}
 		}
 
+		const diffuse = smoothstep(-0.12, 1.0, ndl);
+		const shade = clamp(float(1).add(relief.mul(9.0)), 0.35, 1.6);
 		const H = normalize(L.add(V));
-		const spec = pow(max(dot(N, H), 0.0), 70.0).mul(water).mul(light).mul(1.4);
-		const fresnel = pow(oneMinus(clamp(dot(N, V), 0, 1)), 2.5);
-		const rim = atmo.mul(fresnel).mul(smoothstep(-0.35, 0.5, ndl)).mul(0.9);
-		const ambient = float(0.018);
-		const lit = albedo.mul(light.add(ambient)).add(spec).add(rim).add(emissive);
-		return lit.add(atmo.mul(fresnel).mul(highlight).mul(0.8));
+		const spec = pow(max(dot(N, H), 0.0), 90.0).mul(water).mul(diffuse).mul(1.2);
+		// warm scattering at the terminator for planets with an atmosphere
+		const dusk = visual.atmosphere
+			? mix(vec3(1.0, 0.62, 0.42), vec3(1.0), smoothstep(0.0, 0.35, ndl))
+			: vec3(1.0);
+		const fresnel = pow(oneMinus(clamp(dot(N, V), 0, 1)), 3.0);
+		const rim = atmo.mul(fresnel).mul(smoothstep(-0.25, 0.4, ndl)).mul(visual.atmosphere ? 0.55 : 0.12);
+		const lit = albedo.mul(diffuse.mul(shade).mul(dusk).add(0.012)).add(spec).add(rim).add(emissive);
+		return lit.add(atmo.mul(fresnel).mul(highlight).mul(0.6));
 	})();
 
 	return { material, uniforms: { sunPosition: sun, highlight } };
+};
+
+/** separate cloud shell: clean layering and parallax over the surface */
+export const createCloudMaterial = (sun: PlanetUniforms['sunPosition'], seed: number, density = 0.5) => {
+	const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+	const spin = time.mul(0.024 + (seed % 1) * 0.02);
+	const p = rotY(normalize(positionLocal), spin).add(vec3(seed * 3.1, seed * 1.7, 0));
+	const warp = mx_fractal_noise_vec3(p.mul(1.6), 2).mul(0.4);
+	const n = mx_fractal_noise_float(p.add(warp).mul(vec3(2.2, 4.2, 2.2)), 4).mul(0.5).add(0.5);
+	const cover = smoothstep(1.0 - density * 0.62, 1.0 - density * 0.25, n);
+	const N = normalize(normalWorld);
+	const L = normalize(sun.sub(positionWorld));
+	const light = smoothstep(-0.15, 0.8, dot(N, L));
+	material.colorNode = vec3(1.0, 0.99, 0.97).mul(light.mul(0.95).add(0.02));
+	material.opacityNode = cover.mul(0.92);
+	return material;
 };
 
 export const createAtmosphereMaterial = (hex: string, sun: PlanetUniforms['sunPosition']) => {
@@ -230,10 +277,12 @@ export const createAtmosphereMaterial = (hex: string, sun: PlanetUniforms['sunPo
 	const N = normalize(normalWorld);
 	const V = normalize(cameraPosition.sub(positionWorld));
 	const L = normalize(sun.sub(positionWorld));
-	const fres = pow(oneMinus(clamp(dot(N, V), 0, 1)), 3.5);
-	const day = smoothstep(-0.4, 0.6, dot(N, L));
-	material.colorNode = col(hex).mul(1.6);
-	material.opacityNode = fres.mul(day).mul(0.95);
+	const ndl = dot(N, L);
+	const fres = pow(oneMinus(clamp(dot(N, V), 0, 1)), 4.0);
+	const day = smoothstep(-0.35, 0.5, ndl);
+	const dusk = mix(vec3(1.0, 0.5, 0.3), vec3(1.0), smoothstep(-0.1, 0.4, ndl));
+	material.colorNode = dusk.mul(col(hex)).mul(1.3);
+	material.opacityNode = fres.mul(day).mul(0.75);
 	return material;
 };
 
@@ -263,6 +312,19 @@ export const createMoonMaterial = (sun: PlanetUniforms['sunPosition'], seed: num
 	const L = normalize(sun.sub(positionWorld));
 	const light = smoothstep(-0.1, 0.9, dot(normalize(normalWorld), L));
 	material.colorNode = mix(vec3(0.25, 0.24, 0.26), vec3(0.75, 0.73, 0.72), n).mul(light.add(0.02));
+	return material;
+};
+
+/** visitor planets: lit spheres that also glow faintly in their own colour */
+export const createCommunityMaterial = (sun: PlanetUniforms['sunPosition']) => {
+	const material = new THREE.MeshBasicNodeMaterial();
+	const tint = attribute('aTint', 'vec3');
+	const L = normalize(sun.sub(positionWorld));
+	const N = normalize(normalWorld);
+	const V = normalize(cameraPosition.sub(positionWorld));
+	const light = smoothstep(-0.2, 0.9, dot(N, L));
+	const rim = pow(oneMinus(clamp(dot(N, V), 0, 1)), 2.0);
+	material.colorNode = tint.mul(light.mul(0.9).add(0.35)).add(tint.mul(rim).mul(0.8));
 	return material;
 };
 
