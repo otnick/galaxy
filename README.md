@@ -1,30 +1,27 @@
 # Galaxy
 
-Interactive solar-system art project + developer portfolio website built with SvelteKit, TypeScript, TailwindCSS, Prisma, and SQLite.
+Nick Schumacher's portfolio as an explorable universe. Every star is a section (Orbit, Journey, Projects, Signal, Impressum), every planet a piece of content. There is no classic navigation: you fly between suns, and a retro-futurist cockpit HUD shows the text for whatever you have locked on.
 
 ## Features
 
-- Fullscreen canvas animation with deltaTime-driven orbital motion
-- Central sun glow, orbit rings, and persistent planets
-- Deterministic orbit assignment (`20` planets per ring, fixed slot spacing)
-- Liquid Glass design system:
-  - reusable glass panel
-  - glow utilities
-  - gradient atmospheric background
-  - reusable portfolio card
-- Floating glass navbar with smooth transitions
-- Portfolio routes: `/about`, `/projects`, `/contact`
-- API endpoints:
-  - `GET /api/planets`
-  - `POST /api/planets`
-- Prisma + SQLite persistence
+- Real-time 3D universe with WebGPU (automatic WebGL2 fallback)
+- Procedural TSL shaders: stars with coronas, gas giants, lava, ice, rock and ocean worlds with clouds and atmospheres, rings, moons
+- 90k-particle spiral galaxy, noise-shaped nebula clouds, baked nebula sky
+- Smooth camera flights with warp effect, deep links for every star and planet (`/projects/fusch`)
+- Keyboard: `1`–`5` stars, `←`/`→` neighbours, `Esc` zoom out
+- Community belt: visitors launch their own planet (`GET/POST /api/planets`, Prisma + SQLite)
+- Low-power tier for phones, reduced-motion support, static text fallback without GPU
 
 ## Tech Stack
 
-- SvelteKit + TypeScript
-- TailwindCSS (`@tailwindcss/vite`)
+- SvelteKit + TypeScript (Svelte 5)
+- Three.js r187 `three/webgpu` + TSL node materials + `RenderPipeline` post-processing
+- TailwindCSS, Michroma + VT323 via Fontsource
 - Prisma ORM + SQLite
-- Canvas 2D (isolated animation engine, not driven by Svelte reactive frame loops)
+
+Content lives in `src/lib/universe/content.ts`, the engine in `src/lib/universe/engine/`.
+
+Debug URL params: `?debug=low` (force low-power), `nosky`, `nodust`, `nofog` (combinable, e.g. `?debug=low,nofog`).
 
 ## Setup
 
